@@ -19,14 +19,15 @@ document.addEventListener('DOMContentLoaded', () => {
     let userId = 'anonymous';
     let userLocation = "Default Location, India"; 
 
-    let currentWeatherData = { temp: 0, humidity: 0, pressure: 0, rainRate: 0, isDark: false };
+    let currentWeatherData = { temp: 0, humidity: 0, rainRate: 0, isDark: false };
 
     // --- DOM Elements ---
     const locationElement = document.getElementById('currentLocation');
     const tempElement = document.getElementById('currentTemp');
     const humidityElement = document.getElementById('currentHumidity');
-    const pressureElement = document.getElementById('currentPressure');
     const rainElement = document.getElementById('currentRain');
+    const lightElement = document.getElementById('currentLight'); // Swapped Pressure for Light
+    
     const alertBox = document.getElementById('alertBox');
     const suggestionsList = document.getElementById('safetySuggestions');
     const lastUpdatedElement = document.getElementById('lastUpdated');
@@ -35,7 +36,6 @@ document.addEventListener('DOMContentLoaded', () => {
     
     const agriActionElement = document.getElementById('agriAction');
     const cropSuggestionElement = document.getElementById('cropSuggestion');
-    const barometerForecastElement = document.getElementById('barometerForecast'); // NEW ELEMENT
 
     const locationModal = document.getElementById('locationModal');
     const closeModalButton = document.getElementById('closeModal');
@@ -68,7 +68,6 @@ document.addEventListener('DOMContentLoaded', () => {
             if (data) {
                 currentWeatherData.temp = data.temperature || 0;
                 currentWeatherData.humidity = data.humidity || 0;
-                currentWeatherData.pressure = data.pressure || 0;
                 currentWeatherData.rainRate = data.rain_percent || 0;
                 currentWeatherData.isDark = data.is_dark || false;
                 renderDashboard(); 
@@ -141,39 +140,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     closeModalButton.addEventListener('click', hideLocationModal);
 
-    // --- NEW: The Barometer Trick Logic ---
-    function calculateBarometerTrend(currentPressure) {
-        if (!currentPressure || currentPressure === 0) return "Awaiting BMP180 sensor data...";
-
-        const now = Date.now();
-        let history = JSON.parse(localStorage.getItem('pressureHistory'));
-
-        // If no history exists, or history is older than 2 hours, set a new baseline
-        if (!history || (now - history.timestamp) > 2 * 60 * 60 * 1000) {
-            history = { pressure: currentPressure, timestamp: now };
-            localStorage.setItem('pressureHistory', JSON.stringify(history));
-            return "Establishing baseline pressure. Check back in a few minutes for a forecast.";
-        }
-
-        const pressureDiff = currentPressure - history.pressure;
-
-        // Save the new pressure reading to track ongoing trends
-        localStorage.setItem('pressureHistory', JSON.stringify({ pressure: currentPressure, timestamp: now }));
-
-        // Logic based on meteorological pressure drops (hPa)
-        if (pressureDiff <= -1.0) {
-            return "🚨 Rapid pressure drop detected! Expect sudden storms, heavy rain, or high winds very soon.";
-        } else if (pressureDiff <= -0.5) {
-            return "📉 Pressure is dropping steadily. Rain or cloudy weather is approaching.";
-        } else if (pressureDiff >= 1.0) {
-            return "📈 Pressure is rising rapidly. Skies are clearing, expect fair and sunny weather.";
-        } else if (pressureDiff >= 0.5) {
-            return "☀️ Pressure is rising slowly. Weather conditions are generally improving.";
-        } else {
-            return "⚖️ Atmospheric pressure is stable. Expect current weather conditions to continue.";
-        }
-    }
-
     // --- Agricultural Logic Engine ---
     function getAgriInsights(data) {
         let action = "";
@@ -210,22 +176,19 @@ document.addEventListener('DOMContentLoaded', () => {
         const alerts = [];
         const suggestions = [];
 
-        // 1. Process New Barometer Trick
-        barometerForecastElement.textContent = calculateBarometerTrend(data.pressure);
-
-        // 2. Process Agricultural Insights
+        // 1. Process Agricultural Insights
         const agriData = getAgriInsights(data);
         agriActionElement.innerHTML = agriData.action.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>'); 
         cropSuggestionElement.innerHTML = agriData.crop.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
 
-        // 3. Process Weather Safety Alerts
+        // 2. Process Weather Safety Alerts
         if (data.temp > 35 && data.humidity < 70) {
             alerts.push({ type: 'danger', message: 'HEATWAVE WARNING: Extreme Temperatures Detected.' });
             suggestions.push('Farmers: Stay hydrated and schedule heavy manual labor for early morning or late evening.');
         } else if (data.rainRate > 60) { 
             alerts.push({ type: 'danger', message: 'HEAVY RAIN ALERT: Risk of Flooding.' });
             suggestions.push('Move livestock to higher ground. Bring in outdoor drying clothes.');
-        } else if (data.rainRate > 20 || data.pressure < 1000) {
+        } else if (data.rainRate > 20) {
             alerts.push({ type: 'warning', message: 'STORM WATCH: Moderate rain detected.' });
             suggestions.push('Drive farm vehicles with caution on muddy tracks.');
         } else if (data.temp < 22 && data.humidity < 40) {
@@ -241,8 +204,8 @@ document.addEventListener('DOMContentLoaded', () => {
         // Update UI Text
         tempElement.textContent = `${data.temp.toFixed(1)}°C`;
         humidityElement.textContent = `${data.humidity.toFixed(0)}%`;
-        pressureElement.textContent = `${data.pressure.toFixed(1)} hPa`;
         rainElement.textContent = `${data.rainRate}%`;
+        lightElement.textContent = data.isDark ? 'Dark' : 'Daylight'; // Displays based on LDR sensor
         
         alertBox.innerHTML = '';
         suggestionsList.innerHTML = '';
